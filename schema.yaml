@@ -1,0 +1,483 @@
+# Copyright (c) 2019-2022 Oracle and/or its affiliates. All rights reserved.
+# Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
+# 
+
+title: "Data Science Resource Manager Stack"
+description: "Provision Data Science, Data Flow, Notebook, Autonomous Database and its prerequisites"
+schemaVersion: 1.1.0
+version: "20250731"
+locale: "en"
+
+variableGroups:
+  - title: "Basic Hidden"
+    visible: false
+    variables:
+    - compartment_ocid
+    - tenancy_ocid
+    - region
+
+  - title: "General Configuration"
+    visible: true
+    variables:
+    - project_name
+    - project_compartment
+
+  - title: "Autonomous Database: General"
+    visible: true
+    variables:
+    - adb_admin_password
+    - adb_show_advanced
+
+  - title: "Autonomous Database: Advanced Options"
+    visible: ${adb_show_advanced}
+    variables:
+    - adb_license_model
+    - adb_whitelisted_ips
+    - adb_autonomous_maintenance_schedule_type
+    - adb_workload
+    - adb_version
+    - adb_compute_model
+    - adb_compute_count
+    - adb_data_storage_size_in_tbs
+    - adb_backup_retention_period_in_days
+    - adb_character_set
+    - adb_ncharacter_set
+    - adb_is_auto_scaling_enabled
+    - adb_is_auto_scaling_for_storage_enabled
+    - adb_is_dedicated
+    - adb_is_mtls_connection_required
+
+  - title: "Autonomous Database: Network"
+    visible: true
+    variables:
+    - adb_vcn_compartment
+    - adb_vcn_id
+    - adb_subnet_compartment
+    - adb_subnet_id
+
+  - title: "Notebook Configuration"
+    visible: true
+    variables:
+    - nb_shape_name
+    - nb_shape_config_ocpu
+    - nb_shape_config_memory_in_gbs
+
+  - title: "DataFlow: Configuration"
+    visible: true
+    variables:
+    - df_shape_name
+    - df_shape_config_ocpu
+    - df_shape_config_memory_in_gbs
+    - df_show_advanced
+
+  - title: "DataFlow: Advanced Options"
+    visible: true
+    variables:
+    - df_language
+    - df_spark_version
+    - df_num_executors
+
+  - title: "DataFlow: Setup Bucket"
+    visible: true
+    variables:
+    - df_setup_bucket
+    - df_nb_session_url_script
+
+variables:
+  region:
+    type: oci:identity:region:name
+    title: "Region"
+    required: true
+
+  project_compartment:
+    type: oci:identity:compartment:id
+    title: "Compartment:"
+    required: true
+  project_name:
+    type: string
+    title: "Name of Project"
+    description: "The name of Data Science project. Use only <strong>lowercase letters, numbers, _ and -</strong>."
+    required: true
+    pattern: "^[a-z0-9_-]*$"
+
+  adb_admin_password:
+    type: password
+    required: true
+    title: Database Admin User Password
+    description: "The password for the database. Password must be 12 to 30 characters and contain at least 2 uppercase, 2 lowercase, 2 special, and 2 numeric characters. The special characters must be _, #, or -. For example, XYh1z0#_d1604"
+    pattern: "^(?=.*[a-z].*[a-z])(?=.*[A-Z].*[A-Z])(?=.*\\d.*\\d)(?=.*[-_#].*[-_#])[a-zA-Z0-9\\S]{9,32}$"
+    minLength: 12
+    maxLength: 30
+    confirmation: true
+  adb_vcn_compartment:
+    required: false
+    type: oci:identity:compartment:id
+    title: "Select a compartment of VCN:"
+  adb_vcn_id:
+    required: false
+    type: oci:core:vcn:id
+    title: "Select a VCN:"
+    dependsOn:
+      compartmentId: ${adb_vcn_compartment}
+  adb_subnet_compartment:
+    required: false
+    type: oci:identity:compartment:id
+    title: "Select a compartment of Subnet:"
+  adb_subnet_id:
+    required: true
+    type: oci:core:subnet:id
+    title: "Select a Subnet:"
+    dependsOn:
+      compartmentId: ${adb_subnet_compartment}
+      vcnId: ${adb_vcn_id}
+
+  adb_show_advanced:
+    type: boolean
+    title: "Show ADB advanced options?"
+    description: "Shows Autonomous Database advanced options."
+    visible: true
+  adb_autonomous_maintenance_schedule_type:
+    type: enum
+    required: true
+    default: "REGULAR"
+    title: "ADB Maintenance schedule type"
+    description: "The maintenance schedule type of the Autonomous Database Serverless."
+    enum:
+      - "EARLY"
+      - "REGULAR"
+    visible: ${adb_show_advanced}
+  adb_compute_model:
+    type: enum
+    required: true
+    default: "ECPU"
+    title: "ADB Compute model"
+    description: "The compute model of the Autonomous Database."
+    enum:
+      - "ECPU"
+    visible: ${adb_show_advanced}
+  adb_backup_retention_period_in_days:
+    type: number
+    required: true
+    default: 60
+    title: "ADB Backup retention period."
+    description: "Autonomous Data Warehouse (ADW) Backup retention period in days."
+    visible: ${adb_show_advanced}
+  adb_workload: 
+    type: enum
+    required: true
+    default: "DW"
+    title: "ADB Database data workload"
+    description: "Autonomous Data Warehouse (ADW) workload."
+    enum:
+      - "DW"
+    visible: ${adb_show_advanced}
+  adb_whitelisted_ips:
+    type: list
+    required: true
+    default: ["0.0.0.0/0"]
+    title: "ADB client IP access control list. (Whitelisted IPs)"
+    description: "Autonomous Data Warehouse (ADW) whitelisted IPs. The client IP access control list (ACL)."
+    visible: ${adb_show_advanced}
+  adb_data_storage_size_in_tbs:
+    type: number
+    required: true
+    default: "1"
+    title: "ADB database data storage size in TBs"
+    description: "Autonomous Data Warehouse (ADW) data storage size in terabytes."
+    minimum: 1
+    maximum: 128
+    multipleOf: 1
+    visible: ${adb_show_advanced}
+  adb_compute_count:
+    type: enum
+    required: true
+    default: 2
+    title: "ADB Number of Database Nodes"
+    description: "Select 2 for High Availability"
+    enum:
+    - 1
+    - 2
+    visible: ${adb_show_advanced}
+  adb_version:
+    type: enum
+    required: true
+    default: "23ai"
+    title: "ADB Version"
+    description: "A valid Oracle Database version for Autonomous Database."
+    enum:
+    - "23ai"
+    visible: ${adb_show_advanced}
+  adb_license_model:
+    type: enum
+    required: true
+    default: "LICENSE_INCLUDED"
+    title: "ADB License model"
+    description: "The Oracle license model that applies to the Oracle Autonomous Database."
+    enum:
+    - "LICENSE_INCLUDED"
+    - "BRING_YOUR_OWN_LICENSE"
+    visible: ${adb_show_advanced}
+  adb_character_set:
+    type: string
+    required: true
+    default: AL32UTF8
+    title: "ADB character set"
+    description: "The character set for the autonomous database."
+    visible: ${adb_show_advanced}
+  adb_ncharacter_set:
+    type: string
+    required: true
+    default: AL16UTF16
+    title: "ADB ncharacter set"
+    description: "The ncharacter set for the Autonomous Database."
+    visible: ${adb_show_advanced}
+  adb_is_auto_scaling_enabled:
+    type: boolean
+    required: true
+    default: true
+    title: "ADB CPU core count auto scaling"
+    description: "Indicates if auto scaling is enabled for the Autonomous Database CPU core count."
+    visible: ${adb_show_advanced}
+  adb_is_auto_scaling_for_storage_enabled:
+    type: boolean
+    required: true
+    default: false
+    title: "ADB Storage auto scaling"
+    description: "Indicates if auto scaling is enabled for the Autonomous Database storage."
+    visible: ${adb_show_advanced}
+  adb_is_dedicated:
+    type: boolean
+    required: true
+    default: false
+    title: "ADB Dedicated Exadata infrastructure"
+    description: "Autonomous Database database is on dedicated Exadata infrastructure."
+    visible: ${adb_show_advanced}
+  adb_is_mtls_connection_required:
+    type: boolean
+    required: true
+    default: false
+    title: "ADB mTLS connections"
+    description: "Specifies if the Autonomous Database requires mTLS connections."
+    visible: ${adb_show_advanced}
+
+  nb_shape_name:
+    title: Notebook Shape
+    default: "VM.Standard.E4.Flex"
+    description: The shape for Notebook.
+    type: oci:core:instanceshape:name
+    required: true
+    dependsOn:
+      compartmentId: compartment_ocid
+  nb_shape_config_ocpu:
+    type: integer
+    minimum: 1
+    maximum: 64
+    default: 1
+    title: "Number of OCPUs"
+    description: "You can customize the number of OCPUs to a flexible shape."
+    required: true
+    visible:
+      or:
+        - eq:
+          - nb_shape_name
+          - "VM.Standard3.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E3.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E4.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E5.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E6.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.A1.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.A2.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.DenseIO.E4.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.DenseIO.E5.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Optimized3.Flex"
+  nb_shape_config_memory_in_gbs:
+    type: integer
+    minimum: 1
+    maximum: 1024
+    default: 16
+    title: "Amount of memory (GB)"
+    description: "You can customize the amount of memory allocated to a flexible shape."
+    required: true
+    visible:
+      or:
+        - eq:
+          - nb_shape_name
+          - "VM.Standard3.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E3.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E4.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E5.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E6.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.A1.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.A2.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.DenseIO.E4.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.DenseIO.E5.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Optimized3.Flex"
+
+  df_shape_name:
+    default: "VM.Standard.E3.Flex"
+    type: oci:core:instanceshape:name
+    title: "Select a shape for the compute instances"
+    dependsOn:
+      compartmentId: compartment_ocid
+    required: true
+  df_shape_config_ocpu:
+    type: integer
+    minimum: 1
+    maximum: 64
+    default: 2
+    title: "Number of OCPUs"
+    required: true
+    visible:
+      or:
+        - eq:
+          - nb_shape_name
+          - "VM.Standard3.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E3.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E4.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E5.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.E6.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.A1.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Standard.A2.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.DenseIO.E4.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.DenseIO.E5.Flex"
+        - eq:
+          - nb_shape_name
+          - "VM.Optimized3.Flex"
+  df_shape_config_memory_in_gbs:
+    type: integer
+    minimum: 1
+    maximum: 1024
+    default: 64
+    title: "Amount of memory (GB)"
+    required: true
+    visible:
+      or:
+        - eq:
+          - df_shape_name
+          - "VM.Standard3.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Standard.E3.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Standard.E4.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Standard.E5.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Standard.E6.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Standard.A1.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Standard.A2.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.DenseIO.E4.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.DenseIO.E5.Flex"
+        - eq:
+          - df_shape_name
+          - "VM.Optimized3.Flex"
+
+  df_show_advanced:
+    type: boolean
+    title: "Show Data Flow advanced options?"
+    description: "Shows Data Flow advanced options."
+    visible: true
+  df_language:
+    type: enum
+    required: true
+    additionalProps:
+      allowMultiple: true
+    default: "PYTHON"
+    title: "Application Language for Data Flow"
+    description: "Application Language for Data Flow"
+    enum:
+        - "PYTHON"
+    visible: df_show_advanced
+  df_spark_version:
+    type: string
+    required: true
+    default: "3.5.0"
+    title: "Application Spark Version for Data Flow"
+    description: "Application Spark Version for Data Flow"
+    visible: df_show_advanced
+  df_num_executors:
+    type: number
+    required: true
+    minimum: 1
+    maximum: 100 
+    multipleOf: 1
+    default: 1
+    title: "Number of Executors for Data Flow Application"
+    description: "Number of Executors for Data Flow Application"
+    visible: df_show_advanced
+
+  df_setup_bucket:
+    type: string
+    required: true
+    default: "dataflow-setup"
+    title: "Setup Bucket for Data Flow"
+    description: "Bucket name for Data Flow Setup. <strong>MAKE SURE THE BUCKET EXISTS BEFORE CONTINUING</strong>."
+    visible: true
+  df_setup_script:
+    type: string
+    default: "settingup_notebook.sh"
+    title: "Setup script name:"
+    description: "The name of script for Data Flow Setup. <strong>MAKE SURE FILE EXIST IN THE BUCKET SPECIFIED ABOVE</strong>."
